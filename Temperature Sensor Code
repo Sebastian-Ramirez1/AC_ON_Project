@@ -1,0 +1,45 @@
+#include <stdio.h>
+#include <driver/adc.h>
+
+float voltageOut;
+float temperatureC;
+float temperatureF;
+float temperatureK;
+
+void setup() {
+Serial.begin(115200);
+adc1_config_width(ADC_WIDTH_BIT_12);
+adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_11);
+}
+
+void loop() {
+  float sum = 0;
+  float sensorVoltage;
+  int i;
+
+  // Sensor value cleaning
+  for (i = 0; i < 100; ++i)
+  {
+  // Read analog value 
+  int sensorValue = adc1_get_raw(ADC1_CHANNEL_0);
+  voltageOut = (sensorValue * 3300) / 4095;
+  sum = sum + voltageOut;
+  delay(200);
+  }
+
+  sensorVoltage = sum / 100;
+
+  // calculate temperature
+  temperatureK = sensorVoltage / 10;
+  temperatureC = temperatureK - 273;
+  temperatureF = (temperatureC * 1.8) + 32;
+
+  // Print temperature values
+  Serial.print("Temperature(ºC): ");
+  Serial.print(temperatureC);
+  Serial.print("  Temperature(ºF): ");
+  Serial.print(temperatureF);
+  Serial.print("  Voltage(mV): ");
+  Serial.println(sensorVoltage);
+  delay(10000);
+}
