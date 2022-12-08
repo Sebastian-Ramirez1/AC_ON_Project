@@ -1,5 +1,60 @@
 #include <stdio.h>
+#include <PubSubClient.h>
 #include <driver/adc.h>
+#include <WiFi.h>
+
+// WiFi parameters and Setup Function
+const char *SSID = "Wifi Name";
+const char *PWD = "password";
+
+void connectToWiFi() {
+  Serial.print("Connectiog to ");
+ 
+  WiFi.begin(SSID, PWD);
+  Serial.println(SSID);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.print("Connected.");
+  
+}
+
+//MQTT Parameter, Setup Function and callback
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient); 
+char *mqttServer = "3.226.110.83";
+int mqttPort = 1883;
+
+void setupMQTT() {
+  mqttClient.setServer(mqttServer, mqttPort);
+  // set the callback function
+  mqttClient.setCallback(callback);
+
+  Serial.print("Done");
+}
+
+void reconnect() {
+  Serial.println("Connecting to MQTT Broker...");
+  while (!mqttClient.connected()) {
+      Serial.println("Reconnecting to MQTT Broker..");
+      String clientId = "ESP32Client-";
+      clientId += String(random(0xffff), HEX);
+      
+      if (mqttClient.connect(clientId.c_str())) {
+        Serial.println("Connected.");
+        // subscribe to topic
+        mqttClient.subscribe("test");
+      }
+      
+  }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  // handle message arrived
+}
+
+
 
 float voltageOut;
 float temperatureC;
@@ -7,12 +62,21 @@ float temperatureF;
 float temperatureK;
 
 void setup() {
-Serial.begin(115200);
-adc1_config_width(ADC_WIDTH_BIT_12);
-adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_11);
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_11);
+
+  connectToWiFi(); //initialize WiFi connection
+  setupMQTT(); //initialize MQTT
 }
 
 void loop() {
+  // put your main code here, to run repeatedly:
+if (!mqttClient.connected())
+   reconnect();
+   mqttClient.loop();
+
   float sum = 0;
   float sensorVoltage;
   int i;
@@ -24,14 +88,15 @@ void loop() {
   int sensorValue = adc1_get_raw(ADC1_CHANNEL_0);
   voltageOut = (sensorValue * 3300) / 4095;
   sum = sum + voltageOut;
-  delay(200);
+  delay(10);
   }
 
   sensorVoltage = sum / 100;
 
-  // calculate temperature
+  //calculate temperature
   temperatureK = sensorVoltage / 10;
   temperatureC = temperatureK - 273;
+  //temperatureC = sensorVoltage /5.5;
   temperatureF = (temperatureC * 1.8) + 32;
 
   // Print temperature values
@@ -41,5 +106,15 @@ void loop() {
   Serial.print(temperatureF);
   Serial.print("  Voltage(mV): ");
   Serial.println(sensorVoltage);
+
+  char tempPubC[20];
+  sprintf(tempPubC, "%.2f", temperatureC);
+  mqttClient.publish("Celcius", tempPubC);
+
+  char tempPubF[20];
+  sprintf(tempPubF, "%.2f", temperatureF);
+  mqttClient.publish("Fahrenheit", tempPubF);
+
   delay(10000);
 }
+
