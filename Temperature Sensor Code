@@ -4,8 +4,14 @@
 #include <WiFi.h>
 
 // WiFi parameters and Setup Function
-const char *SSID = "Wifi Name";
-const char *PWD = "password";
+const char *SSID = "Yadiel’s iPhone (2)";
+const char *PWD = "friendsx2";
+
+float voltageOut;
+float temperatureC;
+float temperatureF;
+float temperatureK;
+float CalibrationT;
 
 void connectToWiFi() {
   Serial.print("Connectiog to ");
@@ -17,7 +23,6 @@ void connectToWiFi() {
     delay(500);
   }
   Serial.print("Connected.");
-  
 }
 
 //MQTT Parameter, Setup Function and callback
@@ -44,34 +49,78 @@ void reconnect() {
       if (mqttClient.connect(clientId.c_str())) {
         Serial.println("Connected.");
         // subscribe to topic
-        mqttClient.subscribe("test");
-      }
-      
+        mqttClient.subscribe("Calibration");
+      }  
   }
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived
+  Serial.println();
+  Serial.print("Message has arrived in topic: ");
+  Serial.println(topic);  
+  Serial.print("Message:");
+  if (!strcmp(topic,"Calibration")){
+    float incoming = byteP_to_float(payload,length);
+    Serial.println(incoming);
+    CalibrationT = incoming;
+  }
 }
 
 
 
-float voltageOut;
-float temperatureC;
-float temperatureF;
-float temperatureK;
+// Miscalleneous
+float byteP_to_float(byte *s, int length)
+{
+    float result = 0;
+    int radix_point = 0;
+    int sign = 1;
+
+    for (int i = 0; i < length; i++)
+    {
+      if ((char)s[i] == '.')
+      {
+        break;
+      }
+      radix_point++;
+    }
+
+    for (int i = 0; i < length; i++)
+    {
+      if((char)s[i] == '-')
+      {
+        sign *= -1;
+        i++;
+      }
+
+      if (i < radix_point)
+      {
+        result += pow(10, radix_point - (i+1)) * (((char)s[i]) - 48);
+      }
+      else if (i > radix_point)
+      {
+        result += pow(10, (radix_point - i)) * (((char)s[i]) - 48);
+      }
+        
+    }
+
+    return sign * result;
+}
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
+
+ connectToWiFi(); //initialize WiFi connection
+
   adc1_config_width(ADC_WIDTH_BIT_12);
   adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_11);
 
-  connectToWiFi(); //initialize WiFi connection
   setupMQTT(); //initialize MQTT
 }
 
 void loop() {
+
   // put your main code here, to run repeatedly:
 if (!mqttClient.connected())
    reconnect();
@@ -95,7 +144,7 @@ if (!mqttClient.connected())
 
   //calculate temperature
   temperatureK = sensorVoltage / 10;
-  temperatureC = temperatureK - 273;
+  temperatureC = (temperatureK - 273) + CalibrationT;
   //temperatureC = sensorVoltage /5.5;
   temperatureF = (temperatureC * 1.8) + 32;
 
@@ -114,7 +163,6 @@ if (!mqttClient.connected())
   char tempPubF[20];
   sprintf(tempPubF, "%.2f", temperatureF);
   mqttClient.publish("Fahrenheit", tempPubF);
-
+  
   delay(10000);
 }
-
